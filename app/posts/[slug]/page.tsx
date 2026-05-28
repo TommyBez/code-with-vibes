@@ -8,6 +8,7 @@ import { SiteFooter } from "@/components/site-footer"
 import { MusicLink } from "@/components/music-link"
 import { mdxComponents } from "@/components/mdx-components"
 import { getAllSlugs, getPostBySlug, formatDate } from "@/lib/posts"
+import { resolveSpotifyResource } from "@/lib/spotify"
 
 interface PostPageProps {
   params: Promise<{ slug: string }>
@@ -35,6 +36,8 @@ export default async function PostPage({ params }: PostPageProps) {
   const post = getPostBySlug(slug)
 
   if (!post) notFound()
+
+  const spotify = await resolveSpotifyResource(post.musicUrl)
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -83,6 +86,7 @@ export default async function PostPage({ params }: PostPageProps) {
             artist={post.musicArtist}
             platform={post.musicPlatform}
             url={post.musicUrl}
+            spotify={spotify}
             className="my-10"
           />
 
