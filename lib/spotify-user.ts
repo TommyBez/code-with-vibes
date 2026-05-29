@@ -153,7 +153,16 @@ async function refreshAccessToken(): Promise<string> {
   })
 
   if (!res.ok) {
-    throw new Error(`Token refresh failed (${res.status}): ${await safeReadError(res)}`)
+    const detail = await safeReadError(res)
+    // A 400 from Spotify here almost always means the stored refresh token was
+    // revoked, expired, or was minted with a different client id — it cannot be
+    // recovered automatically. Tell the operator exactly how to fix it.
+    if (res.status === 400) {
+      throw new Error(
+        `Spotify refresh token is invalid or revoked (${detail}). Reconnect the account: open /api/spotify/connect, authorize, then update SPOTIFY_REFRESH_TOKEN in Project Settings → Environment Variables and redeploy.`,
+      )
+    }
+    throw new Error(`Token refresh failed (${res.status}): ${detail}`)
   }
 
   const data = (await res.json()) as { access_token: string; expires_in: number }
