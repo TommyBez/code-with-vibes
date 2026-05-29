@@ -29,3 +29,24 @@ export async function runIn(
   const [stdout, stderr] = await Promise.all([result.stdout(), result.stderr()])
   return { exitCode: result.exitCode, stdout, stderr }
 }
+
+/**
+ * Run a command with explicit argv (no shell), so arguments containing
+ * untrusted text (e.g. a commit message) cannot be interpreted by the shell.
+ */
+export async function runArgv(
+  sandboxId: string,
+  cmd: string,
+  args: string[],
+  opts: { cwd?: string; env?: Record<string, string> } = {},
+): Promise<ExecResult> {
+  const sandbox = await getSandbox(sandboxId)
+  const result = await sandbox.runCommand({
+    cmd,
+    args,
+    cwd: opts.cwd ?? REPO_DIR,
+    env: opts.env,
+  })
+  const [stdout, stderr] = await Promise.all([result.stdout(), result.stderr()])
+  return { exitCode: result.exitCode, stdout, stderr }
+}

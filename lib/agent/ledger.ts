@@ -25,26 +25,44 @@ export interface Ledger {
   strategyNotes: string
 }
 
-const EMPTY_LEDGER: Ledger = { entries: [], strategyNotes: "" }
+/** A fresh, independent empty ledger (never a shared mutable reference). */
+function createEmptyLedger(): Ledger {
+  return { entries: [], strategyNotes: "" }
+}
+
+function isMissingFile(err: unknown): boolean {
+  const code = (err as { code?: string } | null)?.code
+  return code === "ENOENT" || code === "ENOTDIR"
+}
 
 function ledgerAbsPath(): string {
   return `${REPO_DIR}/${LEDGER_PATH}`
 }
 
-/** Read the ledger from the sandbox working tree, tolerating a missing file. */
+/**
+ * Read the ledger from the sandbox working tree.
+ *
+ * A missing or empty file means "no memory yet" and yields a fresh ledger.
+ * Any other failure (corrupt JSON, I/O errors) is rethrown so the de-dup
+ * guards downstream are never silently bypassed by a reset to empty.
+ */
 export async function readLedger(sandboxId: string): Promise<Ledger> {
   const sandbox = await Sandbox.get({ name: sandboxId })
+
+  let text: string
   try {
-    const text = await sandbox.fs.readFile(ledgerAbsPath(), "utf8")
-    if (!text.trim()) return { ...EMPTY_LEDGER }
-    const parsed = JSON.parse(text) as Partial<Ledger>
-    return {
-      entries: Array.isArray(parsed.entries) ? parsed.entries : [],
-      strategyNotes: typeof parsed.strategyNotes === "string" ? parsed.strategyNotes : "",
-    }
-  } catch {
-    // Missing file or invalid JSON → start fresh rather than failing the run.
-    return { ...EMPTY_LEDGER }
+    text = await sandbox.fs.readFile(ledgerAbsPath(), "utf8")
+  } catch (err) {
+    if (isMissingFile(err)) return createEmptyLedger()
+    throw err
+  }
+
+  if (!text.trim()) return createEmptyLedger()
+
+  const parsed = JSON.parse(text) as Partial<Ledger>
+  return {
+    entries: Array.isArray(parsed.entries) ? parsed.entries : [],
+    strategyNotes: typeof parsed.strategyNotes === "string" ? parsed.strategyNotes : "",
   }
 }
 

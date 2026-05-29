@@ -76,10 +76,14 @@ function htmlResponse(inner: string, isError = false): NextResponse {
   a { color:#e8b84b; }
 </style>
 </head>
-<body><main>${inner}<p><a href="/admin">Back to admin</a></p></main></body>
+<body><main>${inner}<p><a href="/agent">Back to the agent dashboard</a></p></main></body>
 </html>`
   return new NextResponse(body, {
     status: isError ? 400 : 200,
-    headers: { "Content-Type": "text/html; charset=utf-8" },
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      // The success page renders a one-time refresh token; never cache it.
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+    },
   })
 }

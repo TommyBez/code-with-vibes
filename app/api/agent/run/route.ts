@@ -13,17 +13,15 @@ export const maxDuration = 800
  * manually from the dashboard (same bearer). Starts the durable workflow and
  * returns its run id immediately — the long-running work continues durably.
  */
-async function authorize(request: Request): Promise<boolean> {
+function authorize(request: Request): boolean {
   const secret = getCronSecret()
-  const header = request.headers.get("authorization")
-  if (header === `Bearer ${secret}`) return true
-  // Vercel Cron also supports the x-vercel-cron header; still require the secret.
-  const url = new URL(request.url)
-  return url.searchParams.get("secret") === secret
+  // Require the secret in the Authorization header only — never in the URL,
+  // where it would leak into logs, history, and referrers.
+  return request.headers.get("authorization") === `Bearer ${secret}`
 }
 
 async function trigger(request: Request) {
-  if (!(await authorize(request))) {
+  if (!authorize(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
@@ -37,9 +35,15 @@ async function trigger(request: Request) {
     date = undefined
   }
 
-  const run = await start(dailyPublishWorkflow, [date ? { date } : undefined])
-
-  return NextResponse.json({ ok: true, runId: run.runId, startedAt: new Date().toISOString() })
+  try {
+    const run = await start(dailyPublishWorkflow, [date ? { date } : undefined])
+    return NextResponse.json({ ok: true, runId: run.runId, startedAt: new Date().toISOString() })
+  } catch (err) {
+    return NextResponse.json(
+      { ok: false, error: `Failed to start workflow: ${(err as Error).message}` },
+      { status: 500 },
+    )
+  }
 }
 
 export async function GET(request: Request) {

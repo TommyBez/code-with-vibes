@@ -5,9 +5,12 @@ import path from "node:path"
 import { SiteHeader } from "@/components/site-header"
 import { SiteFooter } from "@/components/site-footer"
 import { RunPanel } from "@/components/agent/run-panel"
+import { OperatorLogin } from "@/components/agent/operator-login"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { hasUserAuth } from "@/lib/spotify-user"
+import { isOperator, operatorAuthConfigured } from "@/lib/agent/operator"
+import { operatorLogout } from "./actions"
 import { LEDGER_PATH, getRepoSlug, AGENT_MODEL } from "@/lib/agent/config"
 
 export const metadata: Metadata = {
@@ -51,7 +54,41 @@ async function recentEntries(): Promise<LedgerEntryView[]> {
   }
 }
 
+function PageShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-screen flex-col">
+      <SiteHeader />
+      <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
+        <header className="border-b border-border/60 pb-6">
+          <p className="font-mono text-xs uppercase tracking-[0.2em] text-primary">Autonomous publishing</p>
+          <h1 className="mt-3 font-serif text-3xl font-medium tracking-tight text-balance sm:text-4xl">
+            The agent that writes here
+          </h1>
+          <p className="mt-4 max-w-xl text-pretty leading-relaxed text-muted-foreground">
+            Every day it researches what&apos;s happening in AI, writes an essay on vibe coding, pairs it with a
+            track from your Spotify, and opens a pull request for you to review. Nothing publishes without a merge.
+          </p>
+        </header>
+        {children}
+      </main>
+      <SiteFooter />
+    </div>
+  )
+}
+
 export default async function AgentPage() {
+  const operator = await isOperator()
+
+  // Gate the control surface: configuration, run controls, and editorial
+  // memory are only shown to an authenticated operator.
+  if (!operator) {
+    return (
+      <PageShell>
+        <OperatorLogin configured={operatorAuthConfigured()} />
+      </PageShell>
+    )
+  }
+
   const checks = readiness()
   const canRun = checks.every((c) => c.ready)
   const spotifyConnected = hasUserAuth()
@@ -71,10 +108,15 @@ export default async function AgentPage() {
             Every day it researches what&apos;s happening in AI, writes an essay on vibe coding, pairs it with a
             track from your Spotify, and opens a pull request for you to review. Nothing publishes without a merge.
           </p>
-          <div className="mt-4 flex flex-wrap gap-2 text-xs text-muted-foreground">
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <Badge variant="secondary" className="font-mono">{getRepoSlug()}</Badge>
             <Badge variant="secondary" className="font-mono">{AGENT_MODEL}</Badge>
             <Badge variant="secondary" className="font-mono">daily · 13:00 UTC</Badge>
+            <form action={operatorLogout} className="ml-auto">
+              <Button type="submit" variant="ghost" size="sm" className="h-7 text-xs">
+                Sign out
+              </Button>
+            </form>
           </div>
         </header>
 

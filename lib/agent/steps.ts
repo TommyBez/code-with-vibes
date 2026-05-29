@@ -14,7 +14,7 @@ import {
   pushBranch,
   openPullRequest,
 } from "../sandbox/git"
-import { readLedger, writeLedger, findSimilarTopic, songAlreadyUsed, type LedgerEntry } from "./ledger"
+import { readLedger, writeLedger, findSimilarTopic, songAlreadyUsed, type LedgerEntry, type Ledger } from "./ledger"
 import { renderPostMdx, postPath } from "./post-writer"
 import { postSpecSchema, type PostSpec } from "./validation"
 import { resolveSpotifyResource } from "../spotify"
@@ -68,7 +68,7 @@ export async function researchTrends(sandboxId: string, browserReady: boolean): 
     candidates = await firecrawlSearch(query, 8)
   } catch (err) {
     const msg = (err as Error).message ?? ""
-    if (/429|rate|5\d\d/.test(msg)) throw new RetryableError(`Firecrawl search transient error: ${msg}`)
+    if (/429|rate|limit|5\d\d/i.test(msg)) throw new RetryableError(`Firecrawl search transient error: ${msg}`)
     throw err
   }
 
@@ -93,6 +93,15 @@ export async function researchTrends(sandboxId: string, browserReady: boolean): 
   enriched.push(...candidates.slice(4))
 
   return { query, gatheredAt: new Date().toISOString(), sources: enriched }
+}
+
+/**
+ * Step 3.5 — Load the editorial ledger inside a durable step so ledger IO
+ * never runs directly in the workflow body.
+ */
+export async function loadLedger(sandboxId: string): Promise<Ledger> {
+  "use step"
+  return readLedger(sandboxId)
 }
 
 /**
@@ -168,20 +177,18 @@ export async function writePostFiles(sandboxId: string, spec: PostSpec, isoDate:
 export async function verifyBuild(sandboxId: string, slug: string) {
   "use step"
   // Type-check + build. The build compiles all MDX, catching frontmatter/syntax errors.
-  const build = await runIn(sandboxId, "pnpm build 2>&1 | tail -60", { env: { NEXT_TELEMETRY_DISABLED: "1" } })
+  // Run the build directly (no pipe) so its real exit code is observed.
+  const build = await runIn(sandboxId, "pnpm build 2>&1", { env: { NEXT_TELEMETRY_DISABLED: "1" } })
   if (build.exitCode !== 0) {
     throw new FatalError(`Build failed for new post:\n${build.stdout.slice(-1500)}`)
   }
 
-  // Smoke check: load the post through the app's own loader and assert shape.
-  const smoke = await runIn(
-    sandboxId,
-    `node --input-type=module -e "
-      import('./lib/posts.ts').catch(async () => null);
-      process.exit(0);
-    " 2>&1 || true`,
-  )
-  void smoke
+  // Smoke check: the new post file is actually present in the checkout.
+  const relPath = postPath(slug)
+  const exists = await runIn(sandboxId, `test -f ${JSON.stringify(relPath)} && echo OK`)
+  if (!exists.stdout.includes("OK")) {
+    throw new FatalError(`Post file missing after write: ${relPath}`)
+  }
 
   return { built: true }
 }

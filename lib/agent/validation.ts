@@ -42,6 +42,6 @@ export type PostSpec = z.infer<typeof postSpecSchema>
 /** Estimate reading time from word count at ~200 wpm, matching existing posts. */
 export function estimateReadingTime(markdown: string): string {
   const words = markdown.trim().split(/\s+/).filter(Boolean).length
-  const minutes = Math.max(1, Math.round(words / 200))
+  const minutes = Math.max(1, Math.ceil(words / 200))
   return `${minutes} min read`
 }

@@ -87,6 +87,16 @@ export async function authorPost(input: {
   })
 
   const parsed = postSpecSchema.parse(result.experimental_output)
+
+  // Anti-hallucination guard: a citation is only valid if it points at a source
+  // we actually handed the agent. Drop anything else; fail if nothing remains.
+  const normalize = (u: string) => u.trim().replace(/\/+$/, "").toLowerCase()
+  const allowed = new Set(research.sources.map((s) => normalize(s.url)))
+  const grounded = parsed.sourceUrls.filter((u) => allowed.has(normalize(u)))
+  if (grounded.length === 0) {
+    throw new Error("Agent produced no source URLs that match the provided research set.")
+  }
+  parsed.sourceUrls = grounded
   return parsed
 }
 

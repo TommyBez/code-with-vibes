@@ -2,6 +2,7 @@ import {
   checkAlreadyPublished,
   provisionStep,
   researchTrends,
+  loadLedger,
   validatePost,
   writePostFiles,
   verifyBuild,
@@ -9,7 +10,6 @@ import {
   teardown,
 } from "./steps"
 import { authorPost } from "./author"
-import { readLedger } from "./ledger"
 
 export interface DailyRunResult {
   status: "published" | "skipped" | "failed"
@@ -47,7 +47,7 @@ export async function dailyPublishWorkflow(input?: { date?: string }): Promise<D
     const research = await researchTrends(sandboxId, browserReady)
 
     // 4. Author the post with the DurableAgent (grounded by research + ledger memory).
-    const ledger = await readLedger(sandboxId)
+    const ledger = await loadLedger(sandboxId)
     const draft = await authorPost({ research, ledger, isoDate })
 
     // 5. Validate (schema, novelty, real Spotify URL) and normalize.

@@ -56,7 +56,9 @@ export async function firecrawlSearch(
     })
   }
 
-  return sources
+  // Firecrawl applies `limit` per source bucket, so the merged list can exceed
+  // it — enforce the wrapper's contract of returning at most `limit` results.
+  return sources.slice(0, limit)
 }
 
 /** Scrape a single URL into clean markdown for deeper reading. */

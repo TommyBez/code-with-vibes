@@ -1,5 +1,5 @@
 import "server-only"
-import { runIn } from "./exec"
+import { runIn, runArgv } from "./exec"
 import { getGithubToken, getRepoSlug, BASE_BRANCH } from "@/lib/agent/config"
 
 const GITHUB_API = "https://api.github.com"
@@ -20,7 +20,10 @@ export async function remoteBranchExists(branch: string): Promise<boolean> {
     `${GITHUB_API}/repos/${slug}/git/ref/heads/${encodeURIComponent(branch)}`,
     { headers: ghHeaders(), cache: "no-store" },
   )
-  return res.ok
+  if (res.ok) return true
+  if (res.status === 404) return false
+  // Surface auth/rate-limit/5xx instead of masking them as "branch missing".
+  throw new Error(`GitHub ref lookup failed (${res.status}): ${await res.text()}`)
 }
 
 /** Return the URL of an existing open PR from `branch`, or null. */
@@ -31,7 +34,11 @@ export async function findOpenPr(branch: string): Promise<string | null> {
     `${GITHUB_API}/repos/${slug}/pulls?state=open&head=${owner}:${encodeURIComponent(branch)}`,
     { headers: ghHeaders(), cache: "no-store" },
   )
-  if (!res.ok) return null
+  if (res.status === 404) return null
+  if (!res.ok) {
+    // Surface auth/rate-limit/5xx instead of masking them as "no PR".
+    throw new Error(`GitHub PR lookup failed (${res.status}): ${await res.text()}`)
+  }
   const prs = (await res.json()) as Array<{ html_url: string }>
   return prs[0]?.html_url ?? null
 }
@@ -47,10 +54,11 @@ export async function createBranch(sandboxId: string, branch: string): Promise<v
 
 /** Stage everything and create a single commit. Returns false if nothing changed. */
 export async function commitAll(sandboxId: string, message: string): Promise<boolean> {
-  const safeMsg = message.replace(/"/g, '\\"')
   const status = await runIn(sandboxId, "git add -A && git status --porcelain")
   if (!status.stdout.trim()) return false
-  const res = await runIn(sandboxId, `git commit -m "${safeMsg}"`)
+  // Pass the message as a separate argv entry (no shell) so its contents can
+  // never be interpreted as shell metacharacters.
+  const res = await runArgv(sandboxId, "git", ["commit", "-m", message])
   if (res.exitCode !== 0) {
     throw new Error(`git commit failed: ${res.stderr}`)
   }
