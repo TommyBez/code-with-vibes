@@ -43,7 +43,9 @@ export async function provisionSandbox(): Promise<ProvisionResult> {
   const token = getGithubToken()
   const slug = getRepoSlug()
 
+  const name = `cwv-agent-${Date.now()}`
   const sandbox = await Sandbox.create({
+    name,
     source: {
       type: "git",
       url: `https://github.com/${slug}.git`,
@@ -97,7 +99,7 @@ export async function provisionSandbox(): Promise<ProvisionResult> {
   }
 
   return {
-    sandboxId: sandbox.sandboxId,
+    sandboxId: sandbox.name,
     repoDir: REPO_DIR,
     installSummary,
     browserReady,

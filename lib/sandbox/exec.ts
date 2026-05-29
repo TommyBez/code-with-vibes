@@ -8,9 +8,9 @@ export interface ExecResult {
   stderr: string
 }
 
-/** Reconnect to an existing sandbox by id (state persists across invocations). */
+/** Reconnect to an existing sandbox by name (state persists across invocations). */
 export function getSandbox(sandboxId: string): Promise<Sandbox> {
-  return Sandbox.get({ sandboxId })
+  return Sandbox.get({ name: sandboxId })
 }
 
 /** Run a shell command in an existing sandbox and collect its output. */
