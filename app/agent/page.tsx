@@ -32,7 +32,19 @@ function readiness(): ReadinessItem[] {
     { label: "Firecrawl key", ready: Boolean(process.env.FIRECRAWL_API_KEY), hint: "FIRECRAWL_API_KEY" },
     { label: "GitHub token", ready: Boolean(process.env.AGENT_GITHUB_TOKEN), hint: "AGENT_GITHUB_TOKEN" },
     { label: "AI Gateway", ready: Boolean(process.env.AI_GATEWAY_API_KEY), hint: "AI_GATEWAY_API_KEY" },
-    { label: "Sandbox creds", ready: Boolean(process.env.VERCEL_OIDC_TOKEN || process.env.VERCEL_TOKEN), hint: "Vercel Sandbox auth" },
+    {
+      label: "Sandbox creds",
+      // The SDK resolves credentials lazily from OIDC *or* env vars. On Vercel,
+      // OIDC is available to the runtime even when VERCEL_OIDC_TOKEN isn't a
+      // visible process.env value, so treat any Vercel runtime as ready; off
+      // Vercel (local) we need the explicit token.
+      ready: Boolean(
+        process.env.VERCEL ||
+          process.env.VERCEL_OIDC_TOKEN ||
+          process.env.VERCEL_TOKEN,
+      ),
+      hint: "OIDC on Vercel, or VERCEL_TOKEN locally",
+    },
     { label: "Cron secret", ready: Boolean(process.env.CRON_SECRET), hint: "CRON_SECRET" },
   ]
 }
