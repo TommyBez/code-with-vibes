@@ -44,6 +44,16 @@ export async function provisionSandbox(): Promise<ProvisionResult> {
   const slug = getRepoSlug()
 
   const name = `cwv-agent-${Date.now()}`
+
+  // Inject GitHub auth at the sandbox firewall instead of inside the VM. The
+  // agent runs `git push` and `curl` against GitHub WITHOUT any token in its
+  // commands; the firewall adds the `Authorization: Bearer <token>` header to
+  // outgoing requests to github.com (git over HTTPS) and api.github.com (REST
+  // API for opening the PR). The token therefore never lives in the VM's env,
+  // argv, or git remote. All other egress (npm, Firecrawl, agent-browser, the
+  // AI gateway, Spotify) is allowed unmodified via the "*" rule.
+  // https://vercel.com/changelog/safely-inject-credentials-in-http-headers-with-vercel-sandbox
+  const bearer = `Bearer ${token}`
   const sandbox = await Sandbox.create({
     name,
     source: {
@@ -58,6 +68,13 @@ export async function provisionSandbox(): Promise<ProvisionResult> {
     resources: { vcpus: 4 },
     timeout: 15 * 60 * 1000,
     tags: { app: "code-with-vibes", role: "publishing-agent" },
+    networkPolicy: {
+      allow: {
+        "github.com": [{ transform: [{ headers: { authorization: bearer } }] }],
+        "api.github.com": [{ transform: [{ headers: { authorization: bearer } }] }],
+        "*": [],
+      },
+    },
   })
 
   // Configure commit identity used later for the agent's single commit.
