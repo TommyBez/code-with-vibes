@@ -27,6 +27,38 @@ function truncate(text: string, max = MAX_TOOL_OUTPUT): string {
   return `${text.slice(0, max)}\n\n[output truncated: ${text.length - max} characters removed]`
 }
 
+// Minimal AI SDK ToolCallOptions. bash-tool's `execute` functions ignore this
+// argument, so a placeholder is all that's required to invoke them directly.
+const TOOL_CALL_OPTIONS = { toolCallId: "agent-step", messages: [] } as never
+
+/**
+ * Build bash-tool's filesystem toolkit bound to a live sandbox, inside a step.
+ *
+ * `bash-tool` (and its `just-bash` dependency) is imported dynamically so the
+ * static import never lands in the workflow's deterministic VM bundle — that VM
+ * runs via `vm.runInContext` without `require`/top-level-await support, which
+ * `just-bash` relies on. Inside a `"use step"` (real Node runtime) the dynamic
+ * import resolves normally. We reconnect by sandbox name since a live `Sandbox`
+ * instance is not serializable across durable step boundaries.
+ */
+async function bashToolkit(sandboxId: string) {
+  const sandbox = await Sandbox.get({ name: sandboxId })
+  const { createBashTool } = await import("bash-tool")
+  const { bashToolSandbox } = await import("../sandbox/bash-adapter")
+  const { tools } = await createBashTool({
+    sandbox: bashToolSandbox(sandbox),
+    destination: REPO_DIR,
+    maxOutputLength: MAX_TOOL_OUTPUT,
+    // Skip bash-tool's tool-discovery probe (an extra `ls` per call); the agent
+    // already gets rich static descriptions from createAgentTools below.
+    promptOptions: { toolPrompt: "" },
+    // Disable interactive git auth prompts — the sandbox firewall injects the
+    // GitHub credential on egress, so the agent's git commands carry no token.
+    onBeforeBashCall: ({ command }) => ({ command: `export GIT_TERMINAL_PROMPT=0 && ${command}` }),
+  })
+  return tools
+}
+
 // ---------------------------------------------------------------------------
 // Steps — real I/O, full Node runtime, durable + retryable.
 // ---------------------------------------------------------------------------
@@ -37,13 +69,12 @@ export async function runBashStep(input: {
   command: string
 }): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   "use step"
-  const sandbox = await Sandbox.get({ name: input.sandboxId })
-  // Anchor every command at the repo root and disable interactive git auth
-  // prompts (the sandbox firewall injects GitHub credentials on egress).
-  const wrapped = `cd ${REPO_DIR} && export GIT_TERMINAL_PROMPT=0 && ${input.command}`
-  const result = await sandbox.runCommand({ cmd: "bash", args: ["-lc", wrapped] })
-  const [stdout, stderr] = await Promise.all([result.stdout(), result.stderr()])
-  return { stdout: truncate(stdout), stderr: truncate(stderr), exitCode: result.exitCode }
+  const tools = await bashToolkit(input.sandboxId)
+  const result = (await tools.bash.execute!(
+    { command: input.command },
+    TOOL_CALL_OPTIONS,
+  )) as { stdout: string; stderr: string; exitCode: number }
+  return { stdout: truncate(result.stdout), stderr: truncate(result.stderr), exitCode: result.exitCode }
 }
 
 /** Read a UTF-8 file from the sandbox (path relative to the repo root). */
@@ -52,11 +83,12 @@ export async function readFileStep(input: {
   path: string
 }): Promise<{ ok: boolean; content?: string; error?: string }> {
   "use step"
-  const sandbox = await Sandbox.get({ name: input.sandboxId })
-  const abs = input.path.startsWith("/") ? input.path : `${REPO_DIR}/${input.path}`
+  const tools = await bashToolkit(input.sandboxId)
   try {
-    // With a "utf8" encoding the sandbox fs returns a decoded string.
-    const content = await sandbox.fs.readFile(abs, "utf8")
+    const { content } = (await tools.readFile.execute!(
+      { path: input.path },
+      TOOL_CALL_OPTIONS,
+    )) as { content: string }
     return { ok: true, content: truncate(content) }
   } catch (err) {
     return { ok: false, error: (err as Error).message }
@@ -70,11 +102,13 @@ export async function writeFileStep(input: {
   content: string
 }): Promise<{ ok: boolean; bytes?: number; error?: string }> {
   "use step"
-  const sandbox = await Sandbox.get({ name: input.sandboxId })
-  const rel = input.path.replace(/^\/+/, "")
+  const tools = await bashToolkit(input.sandboxId)
   try {
-    await sandbox.writeFiles([{ path: `${REPO_DIR}/${rel}`, content: Buffer.from(input.content, "utf8") }])
-    return { ok: true, bytes: Buffer.byteLength(input.content, "utf8") }
+    const { success } = (await tools.writeFile.execute!(
+      { path: input.path, content: input.content },
+      TOOL_CALL_OPTIONS,
+    )) as { success: boolean }
+    return { ok: success, bytes: Buffer.byteLength(input.content, "utf8") }
   } catch (err) {
     return { ok: false, error: (err as Error).message }
   }
