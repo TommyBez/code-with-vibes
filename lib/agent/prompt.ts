@@ -1,4 +1,5 @@
 import "server-only"
+import { FIREWALL_PLACEHOLDER } from "./config"
 
 /**
  * Operating prompt for the autonomous "Code with Vibes" publishing agent.
@@ -10,9 +11,10 @@ import "server-only"
  * writing the MDX post, verifying the build, and opening a reviewable PR.
  *
  * Security note baked into the workflow (not something the agent manages):
- * the GitHub token is injected into outgoing requests by the sandbox firewall,
- * so the agent runs `git push` and `curl` WITHOUT any credentials in the
- * commands and the token never lives inside the VM.
+ * the agent sends a placeholder credential and the sandbox firewall swaps in
+ * the real GitHub token on egress, so the PAT never lives inside the VM. The
+ * git remote is pre-seeded with the placeholder; the PR curl must send
+ * `Authorization: Bearer <placeholder>` for the firewall rule to match.
  */
 export const SYSTEM_PROMPT = `You are the resident writer AND release engineer for "Code with Vibes", a personal blog where every essay about *vibe coding* — the flow-state, intuition-led, music-fueled way of building software — is paired with a song.
 
@@ -60,7 +62,7 @@ Use a few \`##\` subheadings. Short paragraphs.
 - Make exactly ONE commit for the post.
 
 # Git + PR commands (run these with bash)
-The sandbox firewall injects GitHub auth automatically, so DO NOT put any token in your commands or remote URLs. Just run plain git/curl:
+GitHub auth is handled by the sandbox firewall. You must NOT use a real token. The \`origin\` remote is already configured with a placeholder credential the firewall swaps for the real token, so plain git works:
 \`\`\`bash
 git checkout -B '{BRANCH}'
 git add -A
@@ -71,9 +73,10 @@ Automated daily vibe-coding post for {TODAY}.
 Co-authored-by: v0[bot] <v0[bot]@users.noreply.github.com>'
 git push origin 'HEAD:refs/heads/{BRANCH}' --force-with-lease
 \`\`\`
-Then open the PR via the GitHub REST API (no Authorization header — the firewall adds it):
+Then open the PR via the GitHub REST API. Send the EXACT placeholder bearer token below — the firewall matches it and substitutes the real credential on egress. Do not change it and do not use a real token:
 \`\`\`bash
 curl -sS -X POST https://api.github.com/repos/{REPO_SLUG}/pulls \\
+  -H "Authorization: Bearer {FIREWALL_PLACEHOLDER}" \\
   -H "Accept: application/vnd.github+json" \\
   -H "X-GitHub-Api-Version: 2022-11-28" \\
   -d '{"title":"<title> ({TODAY})","head":"{BRANCH}","base":"{BASE_BRANCH}","body":"<short markdown summary incl. the paired song and sources>"}'
@@ -117,4 +120,5 @@ export function buildSystemPrompt(input: {
     .replaceAll("{BRANCH}", input.branch)
     .replaceAll("{REPO_SLUG}", input.repoSlug)
     .replaceAll("{BASE_BRANCH}", input.baseBranch)
+    .replaceAll("{FIREWALL_PLACEHOLDER}", FIREWALL_PLACEHOLDER)
 }

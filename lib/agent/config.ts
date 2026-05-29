@@ -38,6 +38,17 @@ export function getGithubToken(): string {
   return required("AGENT_GITHUB_TOKEN")
 }
 
+/**
+ * Sentinel the agent sends in place of the real GitHub credential. The sandbox
+ * firewall matches requests carrying this placeholder and swaps in the real
+ * token on egress, so the PAT never lives inside the VM. Used as the git remote
+ * password (Basic auth) and as the API bearer (`Authorization: Bearer <this>`).
+ */
+export const FIREWALL_PLACEHOLDER = "FIREWALL_INJECTED_TOKEN"
+
+/** Git username paired with the placeholder/token for Basic auth over HTTPS. */
+export const GIT_HTTP_USER = "x-access-token"
+
 /** Git author identity used for the agent's commits. */
 export const GIT_AUTHOR = {
   name: optional("AGENT_GIT_NAME", "Code with Vibes Bot"),
