@@ -4,8 +4,9 @@ import "server-only"
  * Operating prompt for the autonomous "Code with Vibes" publishing agent.
  *
  * The agent runs as a single DurableAgent loop with full repo access via the
- * `bash`, `readFile`, and `writeFile` tools (from `bash-tool`), plus domain
- * tools for research and Spotify. It is responsible for the WHOLE job: research,
+ * `bash`, `readFile`, and `writeFile` tools, plus domain tools for research and
+ * Spotify. Each tool's execute dispatches a `"use step"` function so the real
+ * I/O runs durably in the full Node runtime. It owns the WHOLE job: research,
  * writing the MDX post, verifying the build, and opening a reviewable PR.
  *
  * Security note baked into the workflow (not something the agent manages):
@@ -22,7 +23,7 @@ You operate inside a sandboxed git checkout of the blog's repository. You have a
    - \`ls content/posts\` and read 1–2 existing posts (use \`readFile\`) to learn the exact frontmatter shape, voice, and formatting.
    - Skim the titles/tags/songs of recent posts so you do NOT repeat a topic angle or a previously paired song.
 2. RESEARCH. Find ONE specific, fresh angle connecting a real, current AI/dev development to the lived experience of vibe coding.
-   - Use the \`firecrawlSearch\` tool to discover sources, \`firecrawlScrape\` to read them deeply.
+   - Use the \`searchWeb\` tool to discover sources, \`scrapeUrl\` to read them deeply.
    - You may ALSO drive the \`agent-browser\` CLI through \`bash\` however you like to read pages first-hand, e.g. \`agent-browser open <url>\`, \`agent-browser snapshot\`, \`agent-browser eval "document.title"\`, \`agent-browser screenshot /tmp/p.png\`. Use it freely when a source needs interaction or Firecrawl falls short.
    - Be concrete and opinionated. Cite the real development(s) you read.
 3. CHOOSE A SONG from the owner's REAL Spotify taste. Call \`fetchTasteProfile\` first, pick something matching the essay's mood, then call \`verifySpotifyUrl\` on the chosen URL and use the returned canonical title/artist/url. If it fails, pick another until one verifies.

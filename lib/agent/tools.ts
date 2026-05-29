@@ -55,8 +55,9 @@ export async function readFileStep(input: {
   const sandbox = await Sandbox.get({ name: input.sandboxId })
   const abs = input.path.startsWith("/") ? input.path : `${REPO_DIR}/${input.path}`
   try {
+    // With a "utf8" encoding the sandbox fs returns a decoded string.
     const content = await sandbox.fs.readFile(abs, "utf8")
-    return { ok: true, content: truncate(typeof content === "string" ? content : content.toString("utf8")) }
+    return { ok: true, content: truncate(content) }
   } catch (err) {
     return { ok: false, error: (err as Error).message }
   }

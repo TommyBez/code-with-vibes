@@ -1,12 +1,10 @@
 import { DurableAgent } from "@workflow/ai/agent"
 import { getWritable, RetryableError } from "workflow"
 import { Sandbox } from "@vercel/sandbox"
-import { createBashTool } from "bash-tool"
 import type { UIMessageChunk, ModelMessage } from "ai"
-import { provisionSandbox, REPO_DIR } from "../sandbox/provision"
-import { toBashToolSandbox } from "../sandbox/bash-adapter"
+import { provisionSandbox } from "../sandbox/provision"
 import { remoteBranchExists, findOpenPr } from "../sandbox/git"
-import { domainTools } from "./tools"
+import { createAgentTools } from "./tools"
 import { buildSystemPrompt, buildUserMessage } from "./prompt"
 import { AGENT_MODEL, MAX_AGENT_STEPS, BASE_BRANCH, getRepoSlug } from "./config"
 
@@ -76,33 +74,18 @@ async function provisionStep(): Promise<{ sandboxId: string }> {
 
 /**
  * Drive the DurableAgent. Not a `"use step"` because it constructs non-
- * serializable tool closures — instead, the agent's own loop persists each
- * tool call/result for durable replay.
+ * serializable tool closures — instead, every tool's `execute` dispatches a
+ * `"use step"` function, so the agent's loop persists each tool call/result
+ * for durable replay while the real I/O happens in the full Node runtime.
  */
 async function runAgent(params: { sandboxId: string; isoDate: string; branch: string }): Promise<void> {
   const { sandboxId, isoDate, branch } = params
   const repoSlug = getRepoSlug()
 
-  // Reconnect to the provisioned sandbox (the durable id is its name) and
-  // expose the repo via bash-tool. `@vercel/sandbox` v2 dropped the `sandboxId`
-  // property bash-tool duck-types on, so we pass an explicit adapter.
-  const sandbox = await Sandbox.get({ name: sandboxId })
-  const { tools: bashTools } = await createBashTool({
-    sandbox: toBashToolSandbox(sandbox),
-    // bash-tool prepends `cd "${destination}"` to every command, anchoring it
-    // in the repo root; readFile/writeFile resolve relative paths from here too.
-    destination: REPO_DIR,
-    // Disable interactive git auth prompts (the firewall supplies credentials).
-    onBeforeBashCall: ({ command }) => ({
-      command: `export GIT_TERMINAL_PROMPT=0 && ${command}`,
-    }),
-    maxOutputLength: 12_000,
-  })
-
   const agent = new DurableAgent({
     model: AGENT_MODEL,
     instructions: buildSystemPrompt({ isoDate, repoSlug, baseBranch: BASE_BRANCH, branch }),
-    tools: { ...bashTools, ...domainTools },
+    tools: createAgentTools(sandboxId),
   })
 
   const messages: ModelMessage[] = [
