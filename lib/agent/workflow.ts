@@ -4,6 +4,7 @@ import { Sandbox } from "@vercel/sandbox"
 import { createBashTool } from "bash-tool"
 import type { UIMessageChunk, ModelMessage } from "ai"
 import { provisionSandbox, REPO_DIR } from "../sandbox/provision"
+import { toBashToolSandbox } from "../sandbox/bash-adapter"
 import { remoteBranchExists, findOpenPr } from "../sandbox/git"
 import { domainTools } from "./tools"
 import { buildSystemPrompt, buildUserMessage } from "./prompt"
@@ -82,15 +83,18 @@ async function runAgent(params: { sandboxId: string; isoDate: string; branch: st
   const { sandboxId, isoDate, branch } = params
   const repoSlug = getRepoSlug()
 
-  // Reconnect to the provisioned sandbox and expose the repo via bash-tool.
-  const sandbox = await Sandbox.get({ sandboxId })
+  // Reconnect to the provisioned sandbox (the durable id is its name) and
+  // expose the repo via bash-tool. `@vercel/sandbox` v2 dropped the `sandboxId`
+  // property bash-tool duck-types on, so we pass an explicit adapter.
+  const sandbox = await Sandbox.get({ name: sandboxId })
   const { tools: bashTools } = await createBashTool({
-    sandbox,
+    sandbox: toBashToolSandbox(sandbox),
+    // bash-tool prepends `cd "${destination}"` to every command, anchoring it
+    // in the repo root; readFile/writeFile resolve relative paths from here too.
     destination: REPO_DIR,
-    // The Vercel adapter runs `bash -c <cmd>` without a cwd, so anchor every
-    // command in the repo root and disable interactive git auth prompts.
+    // Disable interactive git auth prompts (the firewall supplies credentials).
     onBeforeBashCall: ({ command }) => ({
-      command: `cd ${REPO_DIR} && export GIT_TERMINAL_PROMPT=0 && ${command}`,
+      command: `export GIT_TERMINAL_PROMPT=0 && ${command}`,
     }),
     maxOutputLength: 12_000,
   })
@@ -116,7 +120,7 @@ async function runAgent(params: { sandboxId: string; isoDate: string; branch: st
 async function teardown(sandboxId: string): Promise<void> {
   "use step"
   try {
-    const sandbox = await Sandbox.get({ sandboxId })
+    const sandbox = await Sandbox.get({ name: sandboxId })
     await sandbox.stop()
   } catch {
     // ignore — sandbox auto-expires on timeout anyway.

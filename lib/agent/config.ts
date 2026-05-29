@@ -53,9 +53,8 @@ export function getCronSecret(): string {
   return required("CRON_SECRET")
 }
 
-/** Where posts and the editorial ledger live, relative to the repo root. */
+/** Where posts live, relative to the repo root. */
 export const POSTS_DIR = "content/posts"
-export const LEDGER_PATH = "content/editorial-ledger.json"
 
 /** Hard cap on agent reasoning steps to bound cost and runtime. */
 export const MAX_AGENT_STEPS = 40

@@ -1,7 +1,5 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { promises as fs } from "node:fs"
-import path from "node:path"
 import { SiteHeader } from "@/components/site-header"
 import { SiteFooter } from "@/components/site-footer"
 import { RunPanel } from "@/components/agent/run-panel"
@@ -11,7 +9,8 @@ import { Button } from "@/components/ui/button"
 import { hasUserAuth } from "@/lib/spotify-user"
 import { isOperator, operatorAuthConfigured } from "@/lib/agent/operator"
 import { operatorLogout } from "./actions"
-import { LEDGER_PATH, getRepoSlug, AGENT_MODEL } from "@/lib/agent/config"
+import { getRepoSlug, AGENT_MODEL } from "@/lib/agent/config"
+import { getAllPosts } from "@/lib/posts"
 
 export const metadata: Metadata = {
   title: "Publishing agent",
@@ -47,23 +46,6 @@ function readiness(): ReadinessItem[] {
     },
     { label: "Cron secret", ready: Boolean(process.env.CRON_SECRET), hint: "CRON_SECRET" },
   ]
-}
-
-interface LedgerEntryView {
-  date: string
-  title: string
-  slug: string
-  song: { title: string; artist: string; spotifyUrl: string }
-}
-
-async function recentEntries(): Promise<LedgerEntryView[]> {
-  try {
-    const raw = await fs.readFile(path.join(process.cwd(), LEDGER_PATH), "utf8")
-    const parsed = JSON.parse(raw) as { entries?: LedgerEntryView[] }
-    return (parsed.entries ?? []).slice(-6).reverse()
-  } catch {
-    return []
-  }
 }
 
 function PageShell({ children }: { children: React.ReactNode }) {
@@ -104,7 +86,7 @@ export default async function AgentPage() {
   const checks = readiness()
   const canRun = checks.every((c) => c.ready)
   const spotifyConnected = hasUserAuth()
-  const entries = await recentEntries()
+  const posts = getAllPosts().slice(0, 6)
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -190,27 +172,27 @@ export default async function AgentPage() {
         <section className="mt-6 rounded-lg border border-border bg-card p-6">
           <h2 className="font-serif text-xl font-medium text-card-foreground">Editorial memory</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Recent entries from the repo-as-memory ledger the agent reads to avoid repeating topics or songs.
+            The most recent published posts — the same repo-as-memory the agent inspects to avoid repeating topics or songs.
           </p>
-          {entries.length === 0 ? (
-            <p className="mt-4 text-sm text-muted-foreground">No entries yet — run the agent to create the first post.</p>
+          {posts.length === 0 ? (
+            <p className="mt-4 text-sm text-muted-foreground">No posts yet — run the agent to create the first one.</p>
           ) : (
             <ul className="mt-4 flex flex-col divide-y divide-border/60">
-              {entries.map((e) => (
-                <li key={e.slug} className="flex flex-col gap-1 py-3 sm:flex-row sm:items-center sm:justify-between">
+              {posts.map((p) => (
+                <li key={p.slug} className="flex flex-col gap-1 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <Link href={`/posts/${e.slug}`} className="text-sm font-medium text-card-foreground hover:text-primary">
-                      {e.title}
+                    <Link href={`/posts/${p.slug}`} className="text-sm font-medium text-card-foreground hover:text-primary">
+                      {p.title}
                     </Link>
-                    <p className="font-mono text-xs text-muted-foreground">{e.date}</p>
+                    <p className="font-mono text-xs text-muted-foreground">{p.date}</p>
                   </div>
                   <a
-                    href={e.song.spotifyUrl}
+                    href={p.musicUrl}
                     target="_blank"
                     rel="noreferrer"
                     className="text-xs text-muted-foreground hover:text-primary"
                   >
-                    ♪ {e.song.title} — {e.song.artist}
+                    ♪ {p.musicTitle} — {p.musicArtist}
                   </a>
                 </li>
               ))}
