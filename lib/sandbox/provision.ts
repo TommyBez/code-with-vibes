@@ -98,10 +98,14 @@ export async function provisionSandbox(): Promise<ProvisionResult> {
   if (pnpmInstall.exitCode === 0) {
     installSummary = "pnpm install --frozen-lockfile succeeded"
   } else {
-    const npmInstall = await run(sandbox, "bash", ["-lc", "npm install"])
+    // Fallback must not create/modify lockfiles: a generated package-lock.json
+    // would be swept into the agent's `git add -A` commit. `npm ci` is not an
+    // option here — it requires a package-lock.json, and this repo only ships
+    // pnpm-lock.yaml — so install with lockfile writes disabled instead.
+    const npmInstall = await run(sandbox, "bash", ["-lc", "npm install --no-package-lock"])
     installSummary =
       npmInstall.exitCode === 0
-        ? "npm install succeeded (pnpm unavailable)"
+        ? "npm install --no-package-lock succeeded (pnpm unavailable)"
         : `dependency install FAILED: ${npmInstall.stderr.slice(-500)}`
   }
   void enableCorepack
