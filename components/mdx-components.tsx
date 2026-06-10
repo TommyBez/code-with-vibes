@@ -1,4 +1,6 @@
-import type { MDXComponents } from "mdx/types"
+import type { ComponentPropsWithoutRef, ReactNode } from "react"
+
+type MDXComponents = Record<string, (props: ComponentPropsWithoutRef<"div"> & { href?: string }) => ReactNode>
 
 export const mdxComponents: MDXComponents = {
   h2: ({ children }) => (

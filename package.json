@@ -9,7 +9,9 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@ai-sdk/react": "^3.0.195",
     "@hookform/resolvers": "^3.9.1",
+    "@mendable/firecrawl-js": "^4.25.1",
     "@radix-ui/react-accordion": "1.2.12",
     "@radix-ui/react-alert-dialog": "1.1.15",
     "@radix-ui/react-aspect-ratio": "1.1.8",
@@ -38,7 +40,12 @@
     "@radix-ui/react-toggle-group": "1.1.11",
     "@radix-ui/react-tooltip": "1.2.8",
     "@vercel/analytics": "1.6.1",
+    "@vercel/sandbox": "^2.0.1",
+    "@workflow/ai": "^4.1.2",
+    "agent-browser": "^0.27.0",
+    "ai": "^6.0.193",
     "autoprefixer": "^10.4.20",
+    "bash-tool": "^1.3.16",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.1.1",
@@ -46,6 +53,7 @@
     "embla-carousel-react": "8.6.0",
     "gray-matter": "^4.0.3",
     "input-otp": "1.4.2",
+    "just-bash": "2.14.5",
     "lucide-react": "^0.564.0",
     "mdx": "^0.3.1",
     "next": "16.2.6",
@@ -59,8 +67,10 @@
     "recharts": "2.15.0",
     "server-only": "^0.0.1",
     "sonner": "^1.7.1",
+    "swr": "^2.4.1",
     "tailwind-merge": "^3.3.1",
     "vaul": "^1.1.2",
+    "workflow": "^4.2.5",
     "zod": "^3.24.1"
   },
   "devDependencies": {
